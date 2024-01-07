@@ -131,6 +131,7 @@ class SanitanaEden:
                 b"@",
                 MAC,
                 MAC0,
+                cmd,
                 b" " if args else b"",
                 b" ".join(str(a).encode("ascii") for a in args),
                 b"*&\n",
