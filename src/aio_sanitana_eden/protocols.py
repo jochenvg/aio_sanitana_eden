@@ -1,9 +1,13 @@
+"""Asyncio protocols."""
+
 from asyncio import DatagramProtocol, DatagramTransport, Future, Queue, TaskGroup
 from typing import Any, NoReturn
 
 
 class _QueuedDatagramProtocol(DatagramProtocol):
     """Asyncio UDP Protocol providing async/await interface for sending and receiving packets."""
+
+    _transport: DatagramTransport
 
     def __init__(self, tg: TaskGroup, disconnect: Future) -> None:
         """Initialize a QueuedDatagramProtocol.
@@ -17,7 +21,6 @@ class _QueuedDatagramProtocol(DatagramProtocol):
         self._disconnect: Future = disconnect
         self._send_queue = Queue()
         self._receive_queue = Queue()
-        self._transport: DatagramTransport | None = None
         self._sender_task = tg.create_task(self._run_sender())
 
     async def send(
@@ -32,10 +35,11 @@ class _QueuedDatagramProtocol(DatagramProtocol):
         self._receive_queue.task_done()
         return (data, addr)
 
-    async def send_receive(self, m: bytes) -> bytes:
+    async def send_receive(self, m: bytes) -> tuple[bytes, tuple[str | Any, int]]:
         """Put a datagram in send queue and await a response on the receive queue."""
         await self.send(m)
-        return await self.receive()
+        data, addr = await self.receive()
+        return (data, addr)
 
     async def _run_sender(self):
         while True:

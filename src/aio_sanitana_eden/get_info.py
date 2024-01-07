@@ -1,16 +1,18 @@
+"""Get info on a Sanitana Eden."""
 
-from asyncio import TaskGroup, get_running_loop, timeout
+import asyncio
 from .exceptions import DeviceConnectionError
 from .protocols import _QueuedDatagramProtocol
 
-async def async_get_info(host: str) -> None:
+
+async def async_get_info(host: str) -> dict[str, str | int]:
     """Retrieve information on a Sanitana Eden through its UDP socket."""
 
-    result = {}
-    loop = get_running_loop()
+    result: dict[str, str | int] = {}
+    loop = asyncio.get_running_loop()
     disconnect = loop.create_future()
 
-    def _parse(data: bytes, _) -> list[str]:
+    def _parse(data: bytes, _) -> list[str] | None:
         """Parse AT+ response from USR-WIFI232-G2 used in Sanitana Eden."""
         str_data = data.decode().rstrip("\n\r")
         if str_data.startswith("+ERR="):
@@ -19,8 +21,10 @@ async def async_get_info(host: str) -> None:
             str_data = str_data[4:]
         return str_data.split(",")
 
-    async with TaskGroup() as tg:
+    async with asyncio.TaskGroup() as tg:
         try:
+            transport: asyncio.DatagramTransport
+            protocol: _QueuedDatagramProtocol
             transport, protocol = await loop.create_datagram_endpoint(
                 lambda: _QueuedDatagramProtocol(tg, disconnect),
                 remote_addr=(host, 48899),
@@ -29,12 +33,12 @@ async def async_get_info(host: str) -> None:
             raise DeviceConnectionError from e
 
         try:
-            async with timeout(3):
+            async with asyncio.timeout(3):
                 if data := _parse(*await protocol.send_receive(b"HF-A11ASSISTHREAD")):
                     result["mac_used"] = data[1]
                     result["model"] = data[2]
                 try:
-                    async with timeout(0.1):
+                    async with asyncio.timeout(0.1):
                         await protocol.send(b"+ok")
                         await protocol.receive()
                 except TimeoutError:
@@ -53,4 +57,3 @@ async def async_get_info(host: str) -> None:
         finally:
             transport.close()
             await disconnect
-
