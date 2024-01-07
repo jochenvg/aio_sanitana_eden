@@ -1,6 +1,6 @@
 [project]
 name = "aio_sanitana_eden"
-version = "0.0.3"
+version = "0.0.4"
 authors = [
   { name="Jochen Van Guyse", email="jochen@vanguyse.net" },
 ]

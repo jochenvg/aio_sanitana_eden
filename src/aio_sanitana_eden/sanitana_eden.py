@@ -3,11 +3,7 @@ import asyncio
 from collections.abc import Callable
 from typing import Any
 
-from .bluetooth import SanitanaEdenBluetooth
 from .const import LOGGER, MAC, MAC0
-from .light import SanitanaEdenLight
-from .radio import SanitanaEdenRadio
-from .steam import SanitanaEdenSteam
 
 CALLBACK_TYPE = Callable[[], None]
 
@@ -169,3 +165,150 @@ class SanitanaEden:
         else:
             args = [int(a) for a in data2.split(" ") if a]
         return (cmd, args)
+
+
+class SanitanaEdenRadio:
+    """Represent the radio functions of a Sanitana Eden."""
+
+    def __init__(self, se: SanitanaEden):
+        """Initialize."""
+        self._se = se
+
+    @property
+    def _radio(self) -> tuple[int, ...]:
+        return self._se._state[0:3]
+
+    @property
+    def is_on(self) -> bool:
+        """Return True if the radio is on."""
+        return bool(self._radio[0])
+
+    @property
+    def frequency(self) -> float:
+        """Return the frequency in MHz the radio is tuned to (range 87.5-108, step 0.01)."""
+        return float(self._radio[1]) / 100.0
+
+    @property
+    def volume(self) -> float:
+        """Return the volume of the radio (range 0-63, step 1)."""
+        return float(self._radio[2])
+
+    async def async_turn_on(self, **_) -> None:
+        """Turn radio on."""
+        await self._se._write(b"j", 1, self._radio[1], self._radio[2])
+
+    async def async_turn_off(self, **_) -> None:
+        """Turn radio off."""
+        await self._se._write(b"j", 0, self._radio[1], self._radio[2])
+
+    async def async_set_frequency(self, frequency: float) -> None:
+        """Set the frequency the radio is tuned to."""
+        await self._se._write(
+            b"j", self._radio[0], int(frequency * 100.0), self._radio[2]
+        )
+
+    async def async_set_volume(self, volume: float) -> None:
+        """Set the radio volume."""
+        await self._se._write(b"j", self._radio[0], self._radio[1], int(volume))
+
+
+class SanitanaEdenBluetooth:
+    """Represent the bluetooth functions of a Sanitana Eden."""
+
+    def __init__(self, se: SanitanaEden):
+        """Initialize."""
+        self._se = se
+
+    @property
+    def _bluetooth(self) -> tuple[int, ...]:
+        return self._se._state[3:4]
+
+    @property
+    def is_on(self) -> bool:
+        """Return True if the entity is on."""
+        return bool(self._bluetooth[0])
+
+    async def async_turn_on(self, **_) -> None:
+        """Turn bluetooth on."""
+        await self._se._write(b"r", 1)
+
+    async def async_turn_off(self, **_) -> None:
+        """Turn bluetooth off."""
+        await self._se._write(b"r", 0)
+
+
+class SanitanaEdenLight:
+    """Represent the light functions on a Sanitana Eden."""
+
+    def __init__(self, se: SanitanaEden):
+        """Initialize a SantanaEdenLight."""
+        self._se = se
+
+    @property
+    def _light(self) -> tuple[int, ...]:
+        return self._se._state[4:7]
+
+    @property
+    def brightness(self) -> int:
+        """Return the brightness of the light (0..255)."""
+        return max(self._light)
+
+    @property
+    def is_on(self) -> bool:
+        """Return True if the light is on."""
+        return self.brightness != 0
+
+    @property
+    def rgb_color(self) -> tuple[int, ...]:
+        """Return the RGB color of the light as a tuple[int,int,int]."""
+        brightness = self.brightness
+        if brightness == 0:
+            return (255, 255, 255)
+
+        return tuple(int(x * 255 / brightness) for x in self._light)
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn light on."""
+        rgb_color: tuple[int, ...] = kwargs.get("rgb_color") or self.rgb_color
+        brightness: int = kwargs.get("brightness") or self.brightness or 255
+        rgb_color = tuple(int(x * brightness / 255) for x in rgb_color)
+        await self._se._write(b"m", *rgb_color)
+
+    async def async_turn_off(self, **_) -> None:
+        """Turn light off."""
+        await self._se._write(b"m", 0, 0, 0)
+
+
+class SanitanaEdenSteam:
+    """Represent the steam functions of a Sanitana Eden."""
+
+    def __init__(self, se: SanitanaEden):
+        """Initialize."""
+        self._se = se
+
+    @property
+    def _steam(self) -> tuple[int, ...]:
+        return self._se._state[4:7]
+
+    @property
+    def is_on(self) -> bool:
+        """Return True if the steam generator is on."""
+        return self._steam[0] != 0 or self._steam[1] != 0
+
+    @property
+    def temperature(self) -> float:
+        """Return the temperature in degrees Celcius of the steam program."""
+        return float(self._steam[0])
+
+    @property
+    def remaining(self) -> int:
+        """Percentage of steam program still remaining, counting down from 1024."""
+        return self._steam[1]
+
+    async def async_turn_on(self, temperature: int, minutes: int) -> None:
+        """Turn on steam generator."""
+        await self._se._write(b"n", temperature, minutes)
+
+    async def async_turn_off(self):
+        """Turn steam generator off."""
+        await self._se._write(b"n", 0, 0)
