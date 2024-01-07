@@ -22,7 +22,6 @@ class SanitanaEden:
     _task: asyncio.Task[None]
     _reader: asyncio.StreamReader
     _writer: asyncio.StreamWriter
-    _update: asyncio.Future[bool]
 
     # Callbacks
     _listeners: dict[CALLBACK_TYPE, tuple[CALLBACK_TYPE, object | None]] = {}
@@ -54,12 +53,8 @@ class SanitanaEden:
             pass
 
     async def async_update(self) -> None:
-        """Poll for state from Sanitana Eden and await the next state update."""
-        if not asyncio.isfuture(self._update) or self._update.done():
-            self._update = asyncio.get_running_loop().create_future()
-
+        """Poll for state from Sanitana Eden."""
         await self._write(b"o")
-        await self._update
 
     def async_add_listener(
         self, update_callback: CALLBACK_TYPE, context: Any = None
@@ -72,6 +67,10 @@ class SanitanaEden:
 
         self._listeners[remove_listener] = (update_callback, context)
         return remove_listener
+
+    async def _update_listeners(self) -> None:
+        for update_callback, _ in list(self._listeners.values()):
+            update_callback()
 
     # Exposed property for availability
     @property
@@ -98,10 +97,6 @@ class SanitanaEden:
             dirty = self._setattr_if_changed("_available", False)
             if dirty:
                 await self._update_listeners()
-            # Unblock async_update
-            if asyncio.isfuture(self._update) and not self._update.done():
-                self._update.set_result(None)
-
             await asyncio.sleep(self._RECONNECT_INTERVAL)
 
     async def _run_data(self, tg: asyncio.TaskGroup) -> None:
@@ -119,16 +114,9 @@ class SanitanaEden:
                     # Notify subscribers
                     if dirty:
                         tg.create_task(self._update_listeners())
-                    # Unblock async_update
-                    if asyncio.isfuture(self._update) and not self._update.done():
-                        self._update.set_result(None)
         finally:
             self._writer.close()
             await self._writer.wait_closed()
-
-    async def _update_listeners(self) -> None:
-        for update_callback, _ in list(self._listeners.values()):
-            update_callback()
 
     async def _poll(self) -> None:
         while True:
