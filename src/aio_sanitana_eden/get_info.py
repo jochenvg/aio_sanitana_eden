@@ -1,14 +1,29 @@
 """Get info on a Sanitana Eden."""
 
 import asyncio
+from dataclasses import dataclass
+from typing import Any
 from .exceptions import DeviceConnectionError
 from .protocols import _QueuedDatagramProtocol
 
 
-async def async_get_info(host: str) -> dict[str, str | int]:
+@dataclass(kw_only=True)
+class SanitanaEdenInfo:
+    """Reprensents info on a Sanitana Eden."""
+
+    mac_used: str | None = None
+    model: str | None = None
+    protocol: str | None = None
+    mode: str | None = None
+    port: int | None = None
+    mac_ap: str | None = None
+    mac_sta: str | None = None
+
+
+async def async_get_info(host: str) -> SanitanaEdenInfo:
     """Retrieve information on a Sanitana Eden through its UDP socket."""
 
-    result: dict[str, str | int] = {}
+    result = SanitanaEdenInfo()
     loop = asyncio.get_running_loop()
     disconnect = loop.create_future()
 
@@ -35,8 +50,8 @@ async def async_get_info(host: str) -> dict[str, str | int]:
         try:
             async with asyncio.timeout(3):
                 if data := _parse(*await protocol.send_receive(b"HF-A11ASSISTHREAD")):
-                    result["mac_used"] = data[1]
-                    result["model"] = data[2]
+                    result.mac_used = data[1]
+                    result.model = data[2]
                 try:
                     async with asyncio.timeout(0.1):
                         await protocol.send(b"+ok")
@@ -44,13 +59,13 @@ async def async_get_info(host: str) -> dict[str, str | int]:
                 except TimeoutError:
                     pass
                 if data := _parse(*await protocol.send_receive(b"AT+NETP\r")):
-                    result["protocol"] = data[0]
-                    result["mode"] = data[1]
-                    result["port"] = int(data[2])
+                    result.protocol = data[0]
+                    result.mode = data[1]
+                    result.port = int(data[2])
                 if data := _parse(*await protocol.send_receive(b"AT+WAMAC\r")):
-                    result["mac_ap"] = data[0]
+                    result.mac_ap = data[0]
                 if data := _parse(*await protocol.send_receive(b"AT+WSMAC\r")):
-                    result["mac_sta"] = data[0]
+                    result.mac_sta = data[0]
                 return result
         except Exception as e:
             raise DeviceConnectionError from e
