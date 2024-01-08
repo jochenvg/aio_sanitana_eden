@@ -2,7 +2,6 @@
 
 import asyncio
 from dataclasses import dataclass
-from typing import Any
 from .exceptions import DeviceConnectionError
 from .protocols import _QueuedDatagramProtocol
 
