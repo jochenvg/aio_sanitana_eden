@@ -11,7 +11,6 @@ CALLBACK_TYPE = Callable[[], None]
 class SanitanaEden:
     """Controls a Sanitana Eden steam shower."""
 
-    _POLLING_INTERVAL: float = 1.0
     _RECONNECT_INTERVAL: float = 30.0
 
     # State
@@ -101,7 +100,7 @@ class SanitanaEden:
 
     async def _run_data(self, tg: asyncio.TaskGroup) -> None:
         reader, self._writer = await asyncio.open_connection(self._host, self._port)
-        tg.create_task(self._poll())
+        await self._write(b"o")  # poll for current state
         try:
             while True:
                 b = await reader.readline()
@@ -117,13 +116,6 @@ class SanitanaEden:
         finally:
             self._writer.close()
             await self._writer.wait_closed()
-
-    async def _poll(self) -> None:
-        while True:
-            await self._write(b"o")
-            if self._POLLING_INTERVAL <= 0:
-                break
-            await asyncio.sleep(self._POLLING_INTERVAL)
 
     def _encode(self, cmd: bytes, *args: int) -> bytes:
         result = b"".join(
