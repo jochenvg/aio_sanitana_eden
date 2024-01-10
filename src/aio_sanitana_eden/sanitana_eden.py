@@ -277,7 +277,7 @@ class SanitanaEdenSteam:
 
     @property
     def _steam(self) -> tuple[int, ...]:
-        return self._se._state[4:7]
+        return self._se._state[7:9]
 
     @property
     def is_on(self) -> bool:
@@ -290,13 +290,13 @@ class SanitanaEdenSteam:
         return float(self._steam[0])
 
     @property
-    def remaining(self) -> int:
+    def remaining(self) -> float:
         """Percentage of steam program still remaining, counting down from 1024."""
-        return self._steam[1]
+        return float(self._steam[1]) / 1024.0
 
-    async def async_turn_on(self, temperature: int, minutes: int) -> None:
+    async def async_turn_on(self, temperature: float, minutes: float) -> None:
         """Turn on steam generator."""
-        await self._se._write(b"n", temperature, minutes)
+        await self._se._write(b"n", int(temperature), int(minutes))
 
     async def async_turn_off(self):
         """Turn steam generator off."""
